@@ -25,6 +25,7 @@ SPIKE Prime 走行ロボットテンプレート: 2センサー挟み込み型�
 
 【ファイル構成（どこに何があるか）】
   Config                 … 調整用の係数・閾値をまとめたクラス
+  Debug                  … ログ出力する値ごとの ON/OFF (bool) をまとめたクラス
   Devices                … ハブ・モーター・センサー・DriveBase をまとめたクラス
   PIDState               … PID 制御の内部状態（積分値・前回誤差）
   normalize()            … 反射光を 0〜100 に正規化
@@ -38,7 +39,8 @@ SPIKE Prime 走行ロボットテンプレート: 2センサー挟み込み型�
   trace_step()           … ライントレース 1 ステップ分の処理
   calibrate()            … 白・黒の反射光をボタン操作で測定（任意）
   wait_for_button()      … ボタン待ち
-  debug_print()          … デバッグ表示
+  debug_print()          … Debug で ON の値を表示
+  debug_crossroad()      … 十字路検出時のログ表示
   main()                 … メインループ
 
 【調整の手順（目安）】
@@ -103,10 +105,28 @@ class Config:
     CROSS_SPEED = 150       # 十字路通過時の速度 (mm/s)
     CROSS_EXIT_DISTANCE = 20  # 両センサーが黒を抜けた後もまっすぐ進む距離 (mm)
 
-    # --- ループ・デバッグ ---
+    # --- ループ ---
     LOOP_WAIT_MS = 5        # 1 ループあたりの待ち時間 (ms)
-    DEBUG_PRINT = False     # True でセンサー値などを表示（ループが遅くなる）
-    DEBUG_INTERVAL_MS = 200  # デバッグ表示の間隔 (ms)
+
+
+# =================================================
+# デバッグ設定
+# =================================================
+
+class Debug:
+    """ログ出力の ON/OFF をまとめたクラス。True にした値だけを出力する。
+
+    print はループを遅くするので、必要な値だけ True にする。
+    """
+
+    LEFT = False        # 左センサーの正規化値
+    RIGHT = False       # 右センサーの正規化値
+    ERROR = False       # 誤差 (左 - 右)
+    SPEED = False       # 前進速度 (mm/s)
+    TURN_RATE = False   # 旋回率 (deg/s)
+    CROSSROAD = False   # 十字路を検出したとき
+
+    INTERVAL_MS = 200   # 値のログを出力する間隔 (ms)。CROSSROAD は検出時に毎回出力
 
 
 # =================================================
@@ -236,11 +256,12 @@ def pass_crossroad(devices, config, pid):
     reset_pid(pid)
 
 
-def trace_step(devices, config, pid, dt):
+def trace_step(devices, config, debug, pid, dt):
     """ライントレース 1 ステップ分の処理。表示用に (left, right, error, speed, turn) を返す。"""
     left, right = read_sensors(devices, config)
 
     if is_crossroad(left, right, config):
+        debug_crossroad(debug, left, right)
         pass_crossroad(devices, config, pid)
         return left, right, 0, config.CROSS_SPEED, 0
 
@@ -278,10 +299,28 @@ def calibrate(devices, config):
     print("黒:", config.LEFT_BLACK, config.RIGHT_BLACK)
 
 
-def debug_print(left, right, error, speed, turn_rate):
-    """センサー値・誤差・速度・旋回率を表示する。"""
-    print("L:", int(left), "R:", int(right), "err:", int(error),
-          "spd:", int(speed), "turn:", int(turn_rate))
+def debug_print(debug, left, right, error, speed, turn_rate):
+    """Debug で True になっている値だけを 1 行にまとめて表示する。"""
+    items = []
+    if debug.LEFT:
+        items.append("L:" + str(int(left)))
+    if debug.RIGHT:
+        items.append("R:" + str(int(right)))
+    if debug.ERROR:
+        items.append("err:" + str(int(error)))
+    if debug.SPEED:
+        items.append("spd:" + str(int(speed)))
+    if debug.TURN_RATE:
+        items.append("turn:" + str(int(turn_rate)))
+
+    if items:
+        print(" ".join(items))
+
+
+def debug_crossroad(debug, left, right):
+    """十字路検出時のログを表示する。"""
+    if debug.CROSSROAD:
+        print("十字路検出 L:", int(left), "R:", int(right))
 
 
 # =================================================
@@ -290,6 +329,7 @@ def debug_print(left, right, error, speed, turn_rate):
 
 def main():
     config = Config()
+    debug = Debug()
     devices = Devices(config)
     pid = PIDState()
 
@@ -309,10 +349,10 @@ def main():
         dt = loop_timer.time() / 1000
         loop_timer.reset()
 
-        left, right, error, speed, turn_rate = trace_step(devices, config, pid, dt)
+        left, right, error, speed, turn_rate = trace_step(devices, config, debug, pid, dt)
 
-        if config.DEBUG_PRINT and debug_timer.time() >= config.DEBUG_INTERVAL_MS:
-            debug_print(left, right, error, speed, turn_rate)
+        if debug_timer.time() >= debug.INTERVAL_MS:
+            debug_print(debug, left, right, error, speed, turn_rate)
             debug_timer.reset()
 
         wait(config.LOOP_WAIT_MS)
