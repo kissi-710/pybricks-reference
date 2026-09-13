@@ -15,6 +15,7 @@
 | [03_line_follower.py](03_line_follower.py) | ライントレース（カラーセンサー＋P制御） | 黒線に沿った自律走行 |
 | [04_obstacle_avoidance.py](04_obstacle_avoidance.py) | 障害物回避（超音波センサー） | 衝突を避ける自律走行 |
 | [05_gyro_drive.py](05_gyro_drive.py) | ジャイロを使った精密走行（use_gyro） | 正確な直進・旋回 |
+| [06_dual_sensor_line_trace.py](06_dual_sensor_line_trace.py) | 2センサーで黒線を挟むライントレース（PID・自動減速・十字路直進） | 高速・安定したライントレース |
 
 ## DriveBase の主なメソッド
 
